@@ -136,3 +136,69 @@ testDf.groupBy("documentoClientec", "cuotas").count.orderBy(col("count").desc).s
 testDf.filter(col("documentoClientec")=!="NULL").
 groupBy("documentoClientec", "cuotas").count.orderBy(col("count").desc).show(30)
 ```
+### UDAF
+Se pueden definir funciones de agregación de usuario construyendolas creando un clase heredada de ```UserDefinedAggregateFunction``` y definiendo 4 etapas: ```initialize```, ```update```, ```merge``` y ```evaluate```.
+
+```scala
+import org.apache.spark.sql.expressions.{MutableAggregationBuffer, UserDefinedAggregateFunction}
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.types._
+
+class CustomMean() extends org.apache.spark.sql.expressions.UserDefinedAggregateFunction {
+
+  // Input Data Type Schema
+  def inputSchema: StructType = StructType(Array(StructField("item", DoubleType)))
+
+  // Intermediate Schema
+  def bufferSchema = org.apache.spark.sql.types.StructType(Array(
+    StructField("sum", DoubleType),
+    StructField("cnt", LongType)
+  ))
+
+  // Returned Data Type .
+  def dataType: DataType = DoubleType
+
+  // Self-explaining
+  def deterministic = true
+
+  // This function is called whenever key changes
+  def initialize(buffer: MutableAggregationBuffer) = {
+    buffer(0) = 0.toDouble // set sum to zero
+    buffer(1) = 0L // set number of items to 0
+  }
+
+  // Iterate over each entry of a group
+  def update(buffer: MutableAggregationBuffer, input: Row) = {
+    buffer(0) = buffer.getDouble(0) + input.getDouble(0)
+    buffer(1) = buffer.getLong(1) + 1
+  }
+
+  // Merge two partial aggregates
+  def merge(buffer1: MutableAggregationBuffer, buffer2: Row) = {
+    buffer1(0) = buffer1.getDouble(0) + buffer2.getDouble(0)
+    buffer1(1) = buffer1.getLong(1) + buffer2.getLong(1)
+  }
+
+  // Called after all the entries are exhausted.
+  def evaluate(buffer: Row) = {
+    buffer.getDouble(0)/buffer.getLong(1).toDouble
+  }
+
+}
+```
+Luego se aplica con la ```UDAF``` instanciando la clase creada y aplicandola con el metodo ```agg```
+```scala
+val testDf = spark.table("testdf")
+val custom_mean = new CustomMean()
+testDf.
+filter(col("documentoClientec")=!="NULL").
+groupBy("documentoClientec").agg(
+custom_mean(testDf("monto")).as("custom_mean"),
+avg("monto").as("avg")).
+show()
+testDf.
+.filter(col("documentoClientec")=!="NULL").
+.groupBy(col("monto"))
+.agg(custom_mean(instances.col(colCOL_LABEL))
+.as("custom_mean"))
+```
