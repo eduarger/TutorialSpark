@@ -39,12 +39,16 @@ dfX2.show(5)
 ```
 
 #### DataSet
+Para el dataset se debe definir un  ```case class``` con la estructura: 
+
 ```scala
 case class TX(idn: Int, date: Long, cuotas: Double, monto: Double, documentoclientec: String)
 ```
+Luego a un dataframe se le puede hacer cast con el case class para tener definido el tipo de cada columna
 ```scala
 val testDf = spark.table("testdf").as[TX]
 ```
+Ya con el cast definido me puede referir directamente a la columna y el tipo estaria asegurado por el ```case class```.
 ```scala
 val dfX2 = testDf.map(row=>row.monto*2)
 dfX2.show(5)
