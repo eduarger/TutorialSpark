@@ -10,41 +10,58 @@ Los ejemplos y demos se correran en el shell de Spark. El siguente comando indic
 
 ## Datasets Vs DataFrames
 
-Los ejemplos se basarán en un DataFrame y Dataset cargados directamente de Hive.
+Los ejemplos se basarán en un DataFrame y Dataset cargados directamente de una tabla Hive. La idea es mostrar la diferencia entre los dos API, donde se observara que el DataSet es un tipo de datos con el tipo definido.
 
 ```scala
 import org.apache.spark.sql._
 val testDf = spark.table("testdf")
 test.show(5) //Se muestran los 5 primeros elementos
 ```
-### DataFrame:
-Accedo al row y el shell (Compilador admite el codigo)
+Adicional muestro el esquema de la tabla que se acabo de crear:
 ```scala
+testDf.printSchema()
+```
 
+### DataFrame:
+ Quiero multiplicar cada elemento de la columna por 2.0. Por lo tanto Accedo al row y al el shell obtengo un ```long``` de la columna 3 (monto) y lo multiplico por 2.
+```scala
 val dfX2 = testDf.map(row=>row.getLong(3)*2)
-// Al Ejecutar: Error!!!!
+```
+Al definir la anterior acción, el compilador no verificara que efectivamente se puede obtener un ```long``` de la columna 3 (y como se mostro en el esquema la columna 3 monto es un double), por lo tanto al realizar la siguente acción la operacion fallará:
+```scala
 dfX2.show(5)
-// Se tiene que saber el tipo de dato que voy extraer del ROW y el Compilador
-// detecta el error
+```scala
+Se tiene que saber el tipo de dato que voy extraer del ROW y el Compilador:
+
+```scala
 val dfX2 = testDf.map(row=>row.getDouble(3)*2)
 dfX2.show(5)
+```
 
-// #### crear un case class
+#### DataSet
+```scala
 case class TX(idn: Int, date: Long, cuotas: Double, monto: Double, documentoclientec: String)
+```
+```scala
 val testDf = spark.table("testdf").as[TX]
+```
+```scala
 val dfX2 = testDf.map(row=>row.monto*2)
 dfX2.show(5)
+```
 
 
-/*********
-DEMO 2
-**********/
+## Operaciones Horizontales: UDF
 
-// # UDF and WithColumn
+# UDF and WithColumn
+```scala
 val dfX2=testDf.withColumn("montoX2", testDf("monto")*2)
 dfX2.show(5)
+``` 
 
-// # crear la UDF
+creación de una UDF mas compleja
+
+```scala
 val cocCal = (monto: Double,  cuotas: Double, valDiv0: Double) => {
       var cociente=0.0
       try {
@@ -62,50 +79,56 @@ val cocCal = (monto: Double,  cuotas: Double, valDiv0: Double) => {
         // return
         cociente
              }
-// # registrar la udf
+ ```
+ 
+Se debe registrar la udf
+```scala
 val sqlCocCal = udf(cocCal)
-// aplicar la UDF with Column
+```
+
+Y con el mismo metodo with Column se aplica la UDF
+```scala
 val dfX2=testDf.withColumn("cuotaMensual", sqlCocCal(col("monto"), col("cuotas"), lit(0.0)))
-// check the
+// verificar cuotas>2
 dfX2.filter("cuotas>2").show(10)
 // verificar cuotas 0
 dfX2.filter("cuotas==0").show(10)
-
-
-/*********
-DEMO 3
-**********/
-
-// # Windows
+```
+## Windows: operaciones Horizontales
+Para trabajar con ventanas se importan las siguentes librerías: 
+```scala
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql._
+```
 
-// historica
+### ventana tipo row
+si se quiere solo tener ventanas definidas por algun tipo en concreto de indice:
+
+```scala
 val v1= Window.orderBy(col("date").asc).partitionBy("documentoclientec").rowsBetween(Long.MinValue, -1)
 val dfV1=testDf.withColumn("avg", avg(col("monto")).over(v1))
 dfV1.show(20)
 dfV1.filter(col("documentoclientec")==="45547784").show(10)
+```
+### ventana tipo range
 
+Si se quiere tener definida un vetana con base a un valor actual
 
-
-// rango
+```scala
 val vm = 60*24*3600
 val v2 = Window.orderBy(col("date").asc).partitionBy(col("documentoclientec")).rangeBetween(-vm,-1)
 val dfV2=testDf.withColumn("cuenta60dias", count(col("idn")).over(v2))
 dfV2.withColumn("date", from_unixtime(col("date"))).filter(col("documentoclientec")==="45547784").show(10)
-
-
-/*********
-DEMO 4
-**********/
-
-// groupBy
+```
+## Operaciones sobre grupos
+no se pueden obtener grupos sin ser agregados, la siguente instrucción es un error: 
+```scala
 testDf.groupBy("documentoClientec").show
-// se tiene que definir una agregacion
+```
+Se debe definir una agregacion
+```scala
 testDf.groupBy("documentoClientec").count.orderBy(col("count").desc).show(10)
-
 testDf.groupBy("documentoClientec", "cuotas").count.orderBy(col("count").desc).show(10)
-
 testDf.filter(col("documentoClientec")=!="NULL").
 groupBy("documentoClientec", "cuotas").count.orderBy(col("count").desc).show(30)
 ```
