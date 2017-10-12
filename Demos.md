@@ -15,11 +15,17 @@ Los ejemplos se basarán en un DataFrame y Dataset cargados directamente de una 
 ```scala
 import org.apache.spark.sql._
 val testDf = spark.table("testdf")
-test.show(5) //Se muestran los 5 primeros elementos
+testDf.show(5) //Se muestran los 5 primeros elementos
 ```
 Adicional muestro el esquema de la tabla que se acabo de crear:
 ```scala
 testDf.printSchema()
+root
+ |-- idn: integer (nullable = true)
+ |-- date: long (nullable = true)
+ |-- cuotas: double (nullable = true)
+ |-- monto: double (nullable = true)
+ |-- documentoclientec: string (nullable = true)
 ```
 
 ### DataFrame:
